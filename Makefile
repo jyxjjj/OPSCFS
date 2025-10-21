@@ -1,38 +1,36 @@
-# Makefile for OPSCFS development tasks
-
-.PHONY: all genkeys build test test-race test-store clean clean-testdata
+.PHONY: all build go-test go-test-race test clean
 
 all: build
 
-# build CLI binary
 build:
-	@mkdir -p bin
 	go build -o bin/opscfs .
 
-# run all tests
-test:
+go-test:
 	go test ./...
 
-# run tests with race detector
-test-race:
+go-test-race:
 	go test -race ./...
 
-# run store test using provided TEST_FILE and TEST_NAME (defaults available)
-test-store: build prepare-data
-	@if [ -z "${TEST_FILE}" ]; then echo "Please set TEST_FILE, e.g.: TEST_FILE=abc make test-store"; exit 2; fi
-	@ROOT_DIR=data
-	@KEY_HEX=0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20
-	@NAME=${TEST_NAME:-testfile}
-	@OUT=${OUT_FILE:-out_testfile}
-	@echo "Using TEST_FILE=$$TEST_FILE -> storing as $$NAME in $$ROOT_DIR"
-	@./bin/opscfs -root "$$ROOT_DIR" -key "$$KEY_HEX" add "$$NAME" "$$TEST_FILE"
-	@./bin/opscfs -root "$$ROOT_DIR" -key "$$KEY_HEX" list
-	@./bin/opscfs -root "$$ROOT_DIR" -key "$$KEY_HEX" verify "$$NAME"
-	@./bin/opscfs -root "$$ROOT_DIR" -key "$$KEY_HEX" get "$$NAME" "$$OUT"
-	@./bin/opscfs -root "$$ROOT_DIR" -key "$$KEY_HEX" delete "$$NAME"
-	@./bin/opscfs -root "$$ROOT_DIR" -key "$$KEY_HEX" clean
-	@echo "test-store completed; output file: $$OUT"
+test: build
+	KEY_HEX=$$(openssl rand -hex 32); \
+    echo "KEY is $$KEY_HEX"; \
+    openssl rand -out sample1.bin 1048576; \
+    openssl rand -out sample2.bin 1048576; \
+	./bin/opscfs -root data -key "$$KEY_HEX" add "sample1.bin" "./sample1.bin"; \
+	./bin/opscfs -root data -key "$$KEY_HEX" add "sample2.bin" "./sample2.bin"; \
+	./bin/opscfs -root data -key "$$KEY_HEX" list; \
+	./bin/opscfs -root data -key "$$KEY_HEX" verify-all; \
+	./bin/opscfs -root data -key "$$KEY_HEX" get "sample1.bin" "./sample1.bin.out"; \
+	./bin/opscfs -root data -key "$$KEY_HEX" get "sample2.bin" "./sample2.bin.out"; \
+	./bin/opscfs -root data -key "$$KEY_HEX" delete "sample1.bin"; \
+	./bin/opscfs -root data -key "$$KEY_HEX" list; \
+	./bin/opscfs -root data -key "$$KEY_HEX" clean; \
+	./bin/opscfs -root data -key "$$KEY_HEX" list; \
+	./bin/opscfs -root data -key "$$KEY_HEX" delete "sample2.bin"; \
+	./bin/opscfs -root data -key "$$KEY_HEX" clean; \
+    sha256sum "./sample1.bin" "./sample1.bin.out"; \
+    sha256sum "./sample2.bin" "./sample2.bin.out"; \
+    rm -f ./sample1.bin ./sample1.bin.out ./sample2.bin ./sample2.bin.out
 
 clean:
-	@echo "Cleaning build artifacts..."
 	-rm -f bin/opscfs
